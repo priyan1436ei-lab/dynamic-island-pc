@@ -32,6 +32,7 @@
   ('_threading_local',
    'C:\\Users\\priya\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\_threading_local.py',
    'PYMODULE'),
+  ('app_tracker', 'G:\\My Drive\\New folder (6)\\app_tracker.py', 'PYMODULE'),
   ('argparse',
    'C:\\Users\\priya\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\argparse.py',
    'PYMODULE'),

@@ -1,6 +1,7 @@
 import os
 import sys
 import datetime
+import math
 import tkinter as tk
 from tkinter import ttk
 
@@ -8,12 +9,14 @@ from config import load_config, save_config, DEFAULT_CONFIG
 from system_monitor import SystemMonitor
 from media_controls import MediaControls
 from weather_service import WeatherService
+from app_tracker import AppTracker
 
 TRANSPARENT_KEY = "#010101"
 
-COLOR_BG = "#0c0c10"
-COLOR_CARD = "#14141a"
-COLOR_CARD_BORDER = "#252530"
+COLOR_BG = "#08080c"
+COLOR_CARD = "#121218"
+COLOR_CARD_BORDER = "#22222e"
+COLOR_SPECULAR = "#383848"
 COLOR_TEXT_PRIMARY = "#FFFFFF"
 COLOR_TEXT_SECONDARY = "#8E8E93"
 COLOR_SUCCESS = "#30D158"
@@ -42,7 +45,7 @@ class DynamicIslandApp:
         self.sw_running = False
         self.sw_seconds = 0
 
-        # Pomodoro state (Work: 25m, Break: 5m)
+        # Pomodoro Focus Timer
         self.pomo_running = False
         self.pomo_is_break = False
         self.pomo_seconds_left = self.config.get("pomodoro_work_mins", 25) * 60
@@ -51,18 +54,29 @@ class DynamicIslandApp:
         self.last_clipboard_text = ""
         self.clipboard_history = []
 
-        # Equalizer animation state
+        # Dynamic Alert Notification State
+        self.alert_active = False
+        self.alert_icon = ""
+        self.alert_title = ""
+        self.alert_subtitle = ""
+        self.alert_timer_id = None
+
+        # Equalizer & Pulse phases
         self.eq_phase = 0
+        self.pulse_phase = 0
         self.collapse_timer_id = None
+
+        # Active App Info
+        self.active_app = AppTracker.get_active_app()
 
         # Fixed transparent viewport bounds (No OS window resizing = zero shutter)
         self.screen_width = self.root.winfo_screenwidth()
         self.screen_height = self.root.winfo_screenheight()
         
-        self.viewport_w = 800
-        self.viewport_h = 380
+        self.viewport_w = 840
+        self.viewport_h = 400
         self.viewport_x = (self.screen_width - self.viewport_w) // 2
-        self.viewport_y = self.config.get("top_offset", 6)
+        self.viewport_y = self.config.get("top_offset", 8)
 
         # Setup frameless transparent window
         self.root.overrideredirect(True)
@@ -72,7 +86,7 @@ class DynamicIslandApp:
         self.root.geometry(f"{self.viewport_w}x{self.viewport_h}+{self.viewport_x}+{self.viewport_y}")
 
         # Current dimensions for smooth vector morphing
-        self.cur_w = float(self.config.get("compact_width", 260))
+        self.cur_w = float(self.config.get("compact_width", 280))
         self.cur_h = float(self.config.get("compact_height", 38))
         self.target_w = self.cur_w
         self.target_h = self.cur_h
@@ -104,18 +118,31 @@ class DynamicIslandApp:
         # Initial render
         self.redraw_island()
 
-        # Periodic update timers
+        # Periodic update loops
         self.update_periodic_data()
         self.check_clipboard()
         self.animate_equalizer()
 
     # ==========================================
-    # VECTOR DRAWING (ZERO FLICKER)
+    # LIQUID GLASS VECTOR DRAWING
     # ==========================================
-    def draw_rounded_pill(self, x1, y1, x2, y2, radius, fill_color, border_color):
+    def draw_liquid_glass_pill(self, x1, y1, x2, y2, radius, fill_color, border_color):
         radius = min(radius, (x2 - x1) // 2, (y2 - y1) // 2)
         r2 = radius * 2
 
+        # 1. Subtle Outer Specular Glow (Depth effect)
+        if self.config.get("liquid_glass_glow", True):
+            glow_color = "#181824"
+            gx1, gy1, gx2, gy2 = x1 - 1, y1 - 1, x2 + 1, y2 + 1
+            gr2 = r2 + 2
+            self.canvas.create_arc(gx1, gy1, gx1 + gr2, gy1 + gr2, start=90, extent=90, fill=glow_color, outline="", tags="pill_shape")
+            self.canvas.create_arc(gx2 - gr2, gy1, gx2, gy1 + gr2, start=0, extent=90, fill=glow_color, outline="", tags="pill_shape")
+            self.canvas.create_arc(gx2 - gr2, gy2 - gr2, gx2, gy2, start=270, extent=90, fill=glow_color, outline="", tags="pill_shape")
+            self.canvas.create_arc(gx1, gy2 - gr2, gx1 + gr2, gy2, start=180, extent=90, fill=glow_color, outline="", tags="pill_shape")
+            self.canvas.create_rectangle(gx1 + radius, gy1, gx2 - radius, gy2, fill=glow_color, outline="", tags="pill_shape")
+            self.canvas.create_rectangle(gx1, gy1 + radius, gx2, gy2 - radius, fill=glow_color, outline="", tags="pill_shape")
+
+        # 2. Main Obsidian Glass Body
         self.canvas.create_arc(x1, y1, x1 + r2, y1 + r2, start=90, extent=90, fill=fill_color, outline=border_color, width=1, tags="pill_shape")
         self.canvas.create_arc(x2 - r2, y1, x2, y1 + r2, start=0, extent=90, fill=fill_color, outline=border_color, width=1, tags="pill_shape")
         self.canvas.create_arc(x2 - r2, y2 - r2, x2, y2, start=270, extent=90, fill=fill_color, outline=border_color, width=1, tags="pill_shape")
@@ -124,10 +151,15 @@ class DynamicIslandApp:
         self.canvas.create_rectangle(x1 + radius, y1, x2 - radius, y2, fill=fill_color, outline="", tags="pill_shape")
         self.canvas.create_rectangle(x1, y1 + radius, x2, y2 - radius, fill=fill_color, outline="", tags="pill_shape")
 
+        # 3. Outer Rim Line
         self.canvas.create_line(x1 + radius, y1, x2 - radius, y1, fill=border_color, width=1, tags="pill_shape")
         self.canvas.create_line(x1 + radius, y2, x2 - radius, y2, fill=border_color, width=1, tags="pill_shape")
         self.canvas.create_line(x1, y1 + radius, x1, y2 - radius, fill=border_color, width=1, tags="pill_shape")
         self.canvas.create_line(x2, y1 + radius, x2, y2 - radius, fill=border_color, width=1, tags="pill_shape")
+
+        # 4. Top Glass Specular Reflection Highlight (Liquid Glass reflection)
+        if (x2 - x1) > 60:
+            self.canvas.create_line(x1 + radius + 10, y1 + 1, x2 - radius - 10, y1 + 1, fill=COLOR_SPECULAR, width=1, tags="pill_shape")
 
     def get_island_bounds(self):
         cx = self.viewport_w // 2
@@ -148,13 +180,18 @@ class DynamicIslandApp:
 
         if not self.is_expanded:
             radius = h // 2
-            self.draw_rounded_pill(x1, y1, x2, y2, radius, COLOR_BG, COLOR_CARD_BORDER)
-            self.draw_compact_view(x1, y1, x2, y2)
+            self.draw_liquid_glass_pill(x1, y1, x2, y2, radius, COLOR_BG, COLOR_CARD_BORDER)
+
+            if self.alert_active:
+                self.draw_alert_view(x1, y1, x2, y2)
+            else:
+                self.draw_compact_view(x1, y1, x2, y2)
+
             if self.content_window_id:
                 self.canvas.itemconfigure(self.content_window_id, state="hidden")
         else:
-            radius = 20
-            self.draw_rounded_pill(x1, y1, x2, y2, radius, COLOR_BG, COLOR_CARD_BORDER)
+            radius = 22
+            self.draw_liquid_glass_pill(x1, y1, x2, y2, radius, COLOR_BG, COLOR_CARD_BORDER)
             if self.content_window_id:
                 pad_x = 8
                 pad_y = 6
@@ -180,28 +217,31 @@ class DynamicIslandApp:
             tags="compact_element"
         )
 
-        # 2. Center: Dynamic Activity Equalizer / Blue Notch Dot
-        dot_color = self.accent_color
-        self.canvas.create_oval(
-            cx - 16, cy - 3,
-            cx - 10, cy + 3,
-            fill=dot_color,
-            outline="",
-            tags="compact_element"
-        )
+        # 2. Center: Dynamic Activity or Active App Badge
+        if self.config.get("show_active_app", True):
+            app_icon = self.active_app.get("icon", "💻")
+            app_name = self.active_app.get("app_name", "Windows")[:14]
+            self.canvas.create_text(
+                cx, cy,
+                text=f"{app_icon} {app_name}",
+                fill=COLOR_TEXT_PRIMARY,
+                font=("Segoe UI", 8, "bold"),
+                anchor="center",
+                tags="compact_element"
+            )
+        else:
+            cpu = int(SystemMonitor.get_stats()["cpu_percent"])
+            down = SystemMonitor.get_stats()["net_down"]
+            self.canvas.create_text(
+                cx, cy,
+                text=f"CPU {cpu}% | ⬇️{down}",
+                fill=COLOR_TEXT_SECONDARY,
+                font=("Segoe UI", 7, "bold"),
+                anchor="center",
+                tags="compact_element"
+            )
 
-        cpu = int(SystemMonitor.get_stats()["cpu_percent"])
-        down_speed = SystemMonitor.get_stats()["net_down"]
-        self.canvas.create_text(
-            cx - 4, cy,
-            text=f"CPU {cpu}% | ⬇️{down_speed}",
-            fill=COLOR_TEXT_SECONDARY,
-            font=("Segoe UI", 7, "bold"),
-            anchor="w",
-            tags="compact_element"
-        )
-
-        # 3. Right: Battery
+        # 3. Right: Battery status with Charging indicator
         stats = SystemMonitor.get_stats()
         bat = stats["battery_percent"]
         plugged = stats["battery_plugged"]
@@ -209,13 +249,54 @@ class DynamicIslandApp:
         col = COLOR_SUCCESS if (bat > 20 or plugged) else COLOR_DANGER
 
         self.canvas.create_text(
-            x2 - 14, cy,
+            x2 - 16, cy,
             text=f"{icon} {bat}%",
             fill=col,
             font=("Segoe UI", 8, "bold"),
             anchor="e",
             tags="compact_element"
         )
+
+    def draw_alert_view(self, x1, y1, x2, y2):
+        cy = (y1 + y2) // 2
+        cx = (x1 + x2) // 2
+
+        # Glowing Alert Icon & Title Banner
+        self.canvas.create_text(
+            cx, cy,
+            text=f"{self.alert_icon}  {self.alert_title}",
+            fill=COLOR_TEXT_PRIMARY,
+            font=("Segoe UI", 8, "bold"),
+            anchor="center",
+            tags="compact_element"
+        )
+
+    # ==========================================
+    # DYNAMIC NOTIFICATION BANNERS
+    # ==========================================
+    def show_dynamic_alert(self, icon, title, subtitle="", duration_ms=2500):
+        self.alert_active = True
+        self.alert_icon = icon
+        self.alert_title = title
+        self.alert_subtitle = subtitle
+
+        if not self.is_expanded:
+            # Stretches pill horizontally like Apple Island
+            self.target_w = max(float(self.config.get("compact_width", 280)) + 60, 360.0)
+            self.animate_step()
+
+        if self.alert_timer_id:
+            self.root.after_cancel(self.alert_timer_id)
+
+        self.alert_timer_id = self.root.after(duration_ms, self.dismiss_alert)
+
+    def dismiss_alert(self):
+        self.alert_active = False
+        if not self.is_expanded:
+            self.target_w = float(self.config.get("compact_width", 280))
+            self.animate_step()
+        else:
+            self.redraw_island()
 
     # ==========================================
     # EXPANDED TABS UI
@@ -255,10 +336,10 @@ class DynamicIslandApp:
 
         self.tab_buttons = []
         tabs_info = [
-            ("📊 சிஸ்டம்", 0),
+            ("📊 சிஸ்டம் & ஆப்ஸ்", 0),
             ("🎵 மீடியா", 1),
             ("⚡ கருவிகள்", 2),
-            ("📋 குறிப்பு", 3),
+            ("📋 குறிப்புகள்", 3),
             ("🚀 துவக்கி", 4),
             ("⚙️ அமைப்புகள்", 5)
         ]
@@ -319,9 +400,23 @@ class DynamicIslandApp:
             else:
                 btn.config(bg=COLOR_CARD, fg=COLOR_TEXT_SECONDARY)
 
-    # 1. System Tab with Real-time Network Monitor
+    # 1. System & Active Windows App Tab
     def build_tab_system(self, parent):
         page = tk.Frame(parent, bg=COLOR_CARD, padx=12, pady=6)
+
+        # Active App Card Banner
+        app_card = tk.Frame(page, bg="#1a1a24", padx=8, pady=4, relief="flat", bd=1)
+        app_card.pack(fill="x", pady=(0, 6))
+
+        self.lbl_active_app = tk.Label(
+            app_card,
+            text="தற்போது இயங்கும் அப்ளிகேஷன்: Windows",
+            fg=COLOR_TEXT_PRIMARY,
+            bg="#1a1a24",
+            font=("Segoe UI", 8, "bold"),
+            anchor="w"
+        )
+        self.lbl_active_app.pack(fill="x")
 
         # CPU Row
         cpu_box = tk.Frame(page, bg=COLOR_CARD)
@@ -339,17 +434,17 @@ class DynamicIslandApp:
         self.bar_ram = ttk.Progressbar(ram_box, orient="horizontal", mode="determinate", length=220)
         self.bar_ram.pack(side="left", fill="x", expand=True, padx=4)
 
-        # Network IO Speed Row
+        # Network IO Row
         net_box = tk.Frame(page, bg=COLOR_CARD)
-        net_box.pack(fill="x", pady=4)
+        net_box.pack(fill="x", pady=3)
         self.lbl_net_down = tk.Label(net_box, text="⬇️ பதிவிறக்கம் (Down): 0 KB/s", fg=COLOR_SUCCESS, bg=COLOR_CARD, font=("Segoe UI", 8, "bold"))
         self.lbl_net_down.pack(side="left")
-        self.lbl_net_up = tk.Label(net_box, text="⬆️ பதிவேற்றம் (Up): 0 KB/s", fg=COLOR_ACCENT, bg=COLOR_CARD, font=("Segoe UI", 8, "bold"))
+        self.lbl_net_up = tk.Label(net_box, text="⬆️ பதிவேற்றம் (Up): 0 KB/s", fg=self.accent_color, bg=COLOR_CARD, font=("Segoe UI", 8, "bold"))
         self.lbl_net_up.pack(side="right")
 
-        # Battery & Disk
+        # Battery & Storage
         status_box = tk.Frame(page, bg=COLOR_CARD)
-        status_box.pack(fill="x", pady=4)
+        status_box.pack(fill="x", pady=3)
         self.lbl_battery = tk.Label(status_box, text="🔋 பேட்டரி: 100% (சார்ஜிங்)", fg=COLOR_SUCCESS, bg=COLOR_CARD, font=("Segoe UI", 8, "bold"))
         self.lbl_battery.pack(side="left")
         self.lbl_disk = tk.Label(status_box, text="💾 வட்டு (C:): 0%", fg=COLOR_WARNING, bg=COLOR_CARD, font=("Segoe UI", 8, "bold"))
@@ -357,53 +452,76 @@ class DynamicIslandApp:
 
         return page
 
-    # 2. Media Controls Tab with Animated Visualizer
+    # 2. Media Controls Tab with Animated Equalizer
     def build_tab_media(self, parent):
         page = tk.Frame(parent, bg=COLOR_CARD, padx=12, pady=6)
 
         info = tk.Label(page, text="🎵 விண்டோஸ் மீடியா & ஒலி அளவுக் கட்டுப்பாடு", fg=COLOR_TEXT_SECONDARY, bg=COLOR_CARD, font=("Segoe UI", 8))
         info.pack(pady=2)
 
-        # Equalizer Visualizer Canvas
-        self.eq_canvas = tk.Canvas(page, width=280, height=24, bg=COLOR_CARD, highlightthickness=0)
-        self.eq_canvas.pack(pady=4)
+        # Animated Equalizer Canvas
+        self.eq_canvas = tk.Canvas(page, width=320, height=24, bg=COLOR_CARD, highlightthickness=0)
+        self.eq_canvas.pack(pady=3)
 
         ctrl_box = tk.Frame(page, bg=COLOR_CARD)
         ctrl_box.pack(pady=4)
 
-        btn_prev = tk.Button(ctrl_box, text="⏮ முந்தையது", bg="#202028", fg=COLOR_TEXT_PRIMARY, font=("Segoe UI", 8, "bold"), relief="flat", cursor="hand2", padx=8, pady=3, command=MediaControls.prev_track)
+        btn_prev = tk.Button(ctrl_box, text="⏮ முந்தையது", bg="#202028", fg=COLOR_TEXT_PRIMARY, font=("Segoe UI", 8, "bold"), relief="flat", cursor="hand2", padx=8, pady=3, command=self.action_prev)
         btn_prev.pack(side="left", padx=4)
 
-        self.btn_play = tk.Button(ctrl_box, text="⏯ இயக்கு / நிறுத்து", bg=self.accent_color, fg=COLOR_TEXT_PRIMARY, font=("Segoe UI", 8, "bold"), relief="flat", cursor="hand2", padx=12, pady=3, command=MediaControls.play_pause)
+        self.btn_play = tk.Button(ctrl_box, text="⏯ இயக்கு / நிறுத்து", bg=self.accent_color, fg=COLOR_TEXT_PRIMARY, font=("Segoe UI", 8, "bold"), relief="flat", cursor="hand2", padx=12, pady=3, command=self.action_play)
         self.btn_play.pack(side="left", padx=4)
 
-        btn_next = tk.Button(ctrl_box, text="⏭ அடுத்தது", bg="#202028", fg=COLOR_TEXT_PRIMARY, font=("Segoe UI", 8, "bold"), relief="flat", cursor="hand2", padx=8, pady=3, command=MediaControls.next_track)
+        btn_next = tk.Button(ctrl_box, text="⏭ அடுத்தது", bg="#202028", fg=COLOR_TEXT_PRIMARY, font=("Segoe UI", 8, "bold"), relief="flat", cursor="hand2", padx=8, pady=3, command=self.action_next)
         btn_next.pack(side="left", padx=4)
 
         vol_box = tk.Frame(page, bg=COLOR_CARD)
         vol_box.pack(pady=4)
 
-        btn_vdown = tk.Button(vol_box, text="🔉 சத்தம் குறை", bg="#202028", fg=COLOR_TEXT_PRIMARY, font=("Segoe UI", 8, "bold"), relief="flat", cursor="hand2", padx=8, pady=2, command=MediaControls.volume_down)
+        btn_vdown = tk.Button(vol_box, text="🔉 சத்தம் குறை", bg="#202028", fg=COLOR_TEXT_PRIMARY, font=("Segoe UI", 8, "bold"), relief="flat", cursor="hand2", padx=8, pady=2, command=self.action_vol_down)
         btn_vdown.pack(side="left", padx=3)
 
-        btn_mute = tk.Button(vol_box, text="🔇 மௌனம்", bg="#202028", fg=COLOR_DANGER, font=("Segoe UI", 8, "bold"), relief="flat", cursor="hand2", padx=8, pady=2, command=MediaControls.volume_mute)
+        btn_mute = tk.Button(vol_box, text="🔇 மௌனம்", bg="#202028", fg=COLOR_DANGER, font=("Segoe UI", 8, "bold"), relief="flat", cursor="hand2", padx=8, pady=2, command=self.action_vol_mute)
         btn_mute.pack(side="left", padx=3)
 
-        btn_vup = tk.Button(vol_box, text="🔊 சத்தம் கூட்டு", bg="#202028", fg=COLOR_TEXT_PRIMARY, font=("Segoe UI", 8, "bold"), relief="flat", cursor="hand2", padx=8, pady=2, command=MediaControls.volume_up)
+        btn_vup = tk.Button(vol_box, text="🔊 சத்தம் கூட்டு", bg="#202028", fg=COLOR_TEXT_PRIMARY, font=("Segoe UI", 8, "bold"), relief="flat", cursor="hand2", padx=8, pady=2, command=self.action_vol_up)
         btn_vup.pack(side="left", padx=3)
 
         return page
+
+    def action_play(self):
+        MediaControls.play_pause()
+        self.show_dynamic_alert("⏯️", "மீடியா இயக்கம் / நிறுத்தம்")
+
+    def action_prev(self):
+        MediaControls.prev_track()
+        self.show_dynamic_alert("⏮️", "முந்தைய பாடல்")
+
+    def action_next(self):
+        MediaControls.next_track()
+        self.show_dynamic_alert("⏭️", "அடுத்த பாடல்")
+
+    def action_vol_up(self):
+        MediaControls.volume_up()
+        self.show_dynamic_alert("🔊", "ஒலி அளவு அதிகரிக்கப்பட்டது")
+
+    def action_vol_down(self):
+        MediaControls.volume_down()
+        self.show_dynamic_alert("🔉", "ஒலி அளவு குறைக்கப்பட்டது")
+
+    def action_vol_mute(self):
+        MediaControls.volume_mute()
+        self.show_dynamic_alert("🔇", "மௌனம் (Mute) மாற்றப்பட்டது")
 
     def animate_equalizer(self):
         if hasattr(self, 'eq_canvas') and self.current_tab == 1 and self.is_expanded:
             self.eq_canvas.delete("all")
             self.eq_phase = (self.eq_phase + 1) % 10
-            import math
-            for i in range(18):
+            for i in range(20):
                 h = int(6 + 8 * (math.sin(self.eq_phase + i * 0.6) + 1))
                 x = 10 + i * 15
                 self.eq_canvas.create_rectangle(x, 24 - h, x + 8, 24, fill=self.accent_color, outline="")
-        self.root.after(100, self.animate_equalizer)
+        self.root.after(90, self.animate_equalizer)
 
     # 3. Tools Tab with Stopwatch & Pomodoro Timer
     def build_tab_tools(self, parent):
@@ -439,13 +557,17 @@ class DynamicIslandApp:
         act_box = tk.Frame(page, bg=COLOR_CARD)
         act_box.pack(fill="x", pady=4)
 
-        btn_screen = tk.Button(act_box, text="📸 ஸ்கிரீன்ஷாட் (Screenshot)", bg="#202028", fg=COLOR_TEXT_PRIMARY, font=("Segoe UI", 8, "bold"), relief="flat", cursor="hand2", padx=8, pady=3, command=MediaControls.take_screenshot)
+        btn_screen = tk.Button(act_box, text="📸 ஸ்கிரீன்ஷாட் (Screenshot)", bg="#202028", fg=COLOR_TEXT_PRIMARY, font=("Segoe UI", 8, "bold"), relief="flat", cursor="hand2", padx=8, pady=3, command=self.action_screenshot)
         btn_screen.pack(side="left", padx=4)
 
         btn_lock = tk.Button(act_box, text="🔒 கணினியைப் பூட்டு (Lock PC)", bg="#202028", fg=COLOR_DANGER, font=("Segoe UI", 8, "bold"), relief="flat", cursor="hand2", padx=8, pady=3, command=MediaControls.lock_workstation)
         btn_lock.pack(side="left", padx=4)
 
         return page
+
+    def action_screenshot(self):
+        MediaControls.take_screenshot()
+        self.show_dynamic_alert("📸", "ஸ்கிரீன்ஷாட் எடுக்கப்பட்டது!")
 
     def toggle_stopwatch(self):
         if self.sw_running:
@@ -503,6 +625,7 @@ class DynamicIslandApp:
                 self.pomo_seconds_left = duration * 60
                 tag = "☕ இடைவேளை நேரம்!" if self.pomo_is_break else "🍅 போக்கஸ் நேரம்!"
                 self.lbl_pomo.config(text=tag)
+                self.show_dynamic_alert("🔔", tag)
                 self.run_pomodoro_tick()
 
     # 4. Clipboard History & Quick Notes Tab
@@ -517,7 +640,7 @@ class DynamicIslandApp:
         self.clip_frame.pack(fill="x", pady=2)
         self.render_clipboard_items()
 
-        # Bottom: Quick Notes Text Area
+        # Bottom: Quick Notes
         lbl_notes = tk.Label(page, text="📝 விரைவுக் குறிப்புகள் (Scratchpad):", fg=COLOR_TEXT_SECONDARY, bg=COLOR_CARD, font=("Segoe UI", 8, "bold"))
         lbl_notes.pack(anchor="w", pady=(4, 2))
 
@@ -539,9 +662,12 @@ class DynamicIslandApp:
                         self.clipboard_history.pop()
                     if hasattr(self, 'clip_frame'):
                         self.render_clipboard_items()
+                    # Trigger brief dynamic island alert
+                    preview = text.replace("\n", " ")[:20]
+                    self.show_dynamic_alert("📋", f"நகலெடுக்கப்பட்டது: {preview}")
         except Exception:
             pass
-        self.root.after(1500, self.check_clipboard)
+        self.root.after(1200, self.check_clipboard)
 
     def render_clipboard_items(self):
         for widget in self.clip_frame.winfo_children():
@@ -553,11 +679,11 @@ class DynamicIslandApp:
             return
 
         for item in self.clipboard_history[:3]:
-            row = tk.Frame(self.clip_frame, bg="#1c1c24")
+            row = tk.Frame(self.clip_frame, bg="#1a1a24")
             row.pack(fill="x", pady=1)
 
             display_txt = item.replace("\n", " ")[:36] + ("..." if len(item) > 36 else "")
-            txt_lbl = tk.Label(row, text=display_txt, fg=COLOR_TEXT_PRIMARY, bg="#1c1c24", font=("Segoe UI", 7))
+            txt_lbl = tk.Label(row, text=display_txt, fg=COLOR_TEXT_PRIMARY, bg="#1a1a24", font=("Segoe UI", 7))
             txt_lbl.pack(side="left", padx=4)
 
             btn_copy = tk.Button(row, text="📋 மீண்டும் நகலெடு", bg=self.accent_color, fg=COLOR_TEXT_PRIMARY, font=("Segoe UI", 6, "bold"), relief="flat", cursor="hand2", padx=4, command=lambda t=item: self.copy_to_clip(t))
@@ -566,6 +692,7 @@ class DynamicIslandApp:
     def copy_to_clip(self, text):
         self.root.clipboard_clear()
         self.root.clipboard_append(text)
+        self.show_dynamic_alert("📋", "மீண்டும் கிளிப்போர்டில் நகலெடுக்கப்பட்டது!")
 
     def on_notes_changed(self, event=None):
         self.config["quick_note"] = self.txt_notes.get("1.0", "end-1c")
@@ -613,7 +740,7 @@ class DynamicIslandApp:
         f_cw.pack(fill="x", pady=1)
         self.lbl_set_cw = tk.Label(f_cw, text=f"சுருங்கிய அகலம் (Width): {int(self.cur_w)}px", fg=COLOR_TEXT_PRIMARY, bg=COLOR_CARD, font=("Segoe UI", 8, "bold"), width=26, anchor="w")
         self.lbl_set_cw.pack(side="left")
-        self.scale_cw = tk.Scale(f_cw, from_=160, to=380, orient="horizontal", showvalue=0, bg=COLOR_CARD, fg=COLOR_TEXT_PRIMARY, highlightthickness=0, troughcolor="#202028", activebackground=self.accent_color, command=self.on_set_compact_width)
+        self.scale_cw = tk.Scale(f_cw, from_=160, to=420, orient="horizontal", showvalue=0, bg=COLOR_CARD, fg=COLOR_TEXT_PRIMARY, highlightthickness=0, troughcolor="#202028", activebackground=self.accent_color, command=self.on_set_compact_width)
         self.scale_cw.set(self.config['compact_width'])
         self.scale_cw.pack(side="left", fill="x", expand=True, padx=4)
 
@@ -622,7 +749,7 @@ class DynamicIslandApp:
         f_ch.pack(fill="x", pady=1)
         self.lbl_set_ch = tk.Label(f_ch, text=f"சுருங்கிய உயரம் (Height): {self.config['compact_height']}px", fg=COLOR_TEXT_PRIMARY, bg=COLOR_CARD, font=("Segoe UI", 8, "bold"), width=26, anchor="w")
         self.lbl_set_ch.pack(side="left")
-        self.scale_ch = tk.Scale(f_ch, from_=26, to=50, orient="horizontal", showvalue=0, bg=COLOR_CARD, fg=COLOR_TEXT_PRIMARY, highlightthickness=0, troughcolor="#202028", activebackground=self.accent_color, command=self.on_set_compact_height)
+        self.scale_ch = tk.Scale(f_ch, from_=26, to=52, orient="horizontal", showvalue=0, bg=COLOR_CARD, fg=COLOR_TEXT_PRIMARY, highlightthickness=0, troughcolor="#202028", activebackground=self.accent_color, command=self.on_set_compact_height)
         self.scale_ch.set(self.config['compact_height'])
         self.scale_ch.pack(side="left", fill="x", expand=True, padx=4)
 
@@ -631,7 +758,7 @@ class DynamicIslandApp:
         f_ew.pack(fill="x", pady=1)
         self.lbl_set_ew = tk.Label(f_ew, text=f"விரிந்த அகலம் (Exp Width): {self.config['expanded_width']}px", fg=COLOR_TEXT_PRIMARY, bg=COLOR_CARD, font=("Segoe UI", 8, "bold"), width=26, anchor="w")
         self.lbl_set_ew.pack(side="left")
-        self.scale_ew = tk.Scale(f_ew, from_=400, to=740, orient="horizontal", showvalue=0, bg=COLOR_CARD, fg=COLOR_TEXT_PRIMARY, highlightthickness=0, troughcolor="#202028", activebackground=self.accent_color, command=self.on_set_expanded_width)
+        self.scale_ew = tk.Scale(f_ew, from_=420, to=760, orient="horizontal", showvalue=0, bg=COLOR_CARD, fg=COLOR_TEXT_PRIMARY, highlightthickness=0, troughcolor="#202028", activebackground=self.accent_color, command=self.on_set_expanded_width)
         self.scale_ew.set(self.config['expanded_width'])
         self.scale_ew.pack(side="left", fill="x", expand=True, padx=4)
 
@@ -656,10 +783,22 @@ class DynamicIslandApp:
             btn_col.pack(side="left", padx=2)
 
         self.var_24h = tk.BooleanVar(value=self.config.get("clock_24h", True))
-        chk_24h = tk.Checkbutton(f_opts, text="24-மணி நேர வடிவம்", variable=self.var_24h, fg=COLOR_TEXT_SECONDARY, bg=COLOR_CARD, selectcolor="#202028", font=("Segoe UI", 8), command=self.on_chk_24h_changed)
+        chk_24h = tk.Checkbutton(f_opts, text="24-மணி நேரம்", variable=self.var_24h, fg=COLOR_TEXT_SECONDARY, bg=COLOR_CARD, selectcolor="#202028", font=("Segoe UI", 8), command=self.on_chk_24h_changed)
         chk_24h.pack(side="right", padx=2)
 
-        # Checkboxes
+        # Active App on compact island toggle & Liquid Glass glow toggle
+        f_toggles = tk.Frame(page, bg=COLOR_CARD)
+        f_toggles.pack(fill="x", pady=2)
+
+        self.var_active_app = tk.BooleanVar(value=self.config.get("show_active_app", True))
+        chk_act = tk.Checkbutton(f_toggles, text="இயங்கும் ஆப் பெயர் காட்டு", variable=self.var_active_app, fg=COLOR_TEXT_SECONDARY, bg=COLOR_CARD, selectcolor="#202028", font=("Segoe UI", 8), command=self.on_chk_active_app_changed)
+        chk_act.pack(side="left", padx=2)
+
+        self.var_glass = tk.BooleanVar(value=self.config.get("liquid_glass_glow", True))
+        chk_glass = tk.Checkbutton(f_toggles, text="லிக்விட் கிளாஸ் பிரதிபலிப்பு (Glow)", variable=self.var_glass, fg=COLOR_TEXT_SECONDARY, bg=COLOR_CARD, selectcolor="#202028", font=("Segoe UI", 8), command=self.on_chk_glass_changed)
+        chk_glass.pack(side="right", padx=2)
+
+        # Checkboxes: Hover & Auto-Collapse
         f_chk = tk.Frame(page, bg=COLOR_CARD)
         f_chk.pack(fill="x", pady=2)
 
@@ -682,6 +821,16 @@ class DynamicIslandApp:
         btn_save.pack(side="right")
 
         return page
+
+    def on_chk_active_app_changed(self):
+        self.config["show_active_app"] = self.var_active_app.get()
+        save_config(self.config)
+        self.redraw_island()
+
+    def on_chk_glass_changed(self):
+        self.config["liquid_glass_glow"] = self.var_glass.get()
+        save_config(self.config)
+        self.redraw_island()
 
     def set_accent_color(self, hex_code):
         self.accent_color = hex_code
@@ -764,14 +913,14 @@ class DynamicIslandApp:
     def expand_island(self):
         if not self.is_expanded and not self.animating:
             self.is_expanded = True
-            self.target_w = float(self.config.get("expanded_width", 540))
-            self.target_h = float(self.config.get("expanded_height", 320))
+            self.target_w = float(self.config.get("expanded_width", 560))
+            self.target_h = float(self.config.get("expanded_height", 330))
             self.animate_step()
 
     def collapse_island(self):
         if self.is_expanded and not self.animating:
             self.is_expanded = False
-            self.target_w = float(self.config.get("compact_width", 260))
+            self.target_w = float(self.config.get("compact_width", 280))
             self.target_h = float(self.config.get("compact_height", 38))
             if self.content_window_id:
                 self.canvas.itemconfigure(self.content_window_id, state="hidden")
@@ -788,14 +937,14 @@ class DynamicIslandApp:
         diff_w = self.target_w - self.cur_w
         diff_h = self.target_h - self.cur_h
 
-        if abs(diff_w) < 3.0 and abs(diff_h) < 3.0:
+        if abs(diff_w) < 2.5 and abs(diff_h) < 2.5:
             self.cur_w = self.target_w
             self.cur_h = self.target_h
             self.animating = False
             self.redraw_island()
             return
 
-        step = 0.32
+        step = 0.35  # Smooth spring response
         self.cur_w += diff_w * step
         self.cur_h += diff_h * step
 
@@ -850,9 +999,19 @@ class DynamicIslandApp:
             self.menu.post(event.x_root, event.y_root)
 
     # ==========================================
-    # PERIODIC UPDATES
+    # PERIODIC UPDATES (1 SEC)
     # ==========================================
     def update_periodic_data(self):
+        # 1. Update Active App
+        self.active_app = AppTracker.get_active_app()
+        if hasattr(self, 'lbl_active_app'):
+            app_icon = self.active_app.get("icon", "💻")
+            app_name = self.active_app.get("app_name", "Windows")
+            win_title = self.active_app.get("window_title", "")
+            title_disp = f" - {win_title[:32]}..." if win_title and win_title != app_name else ""
+            self.lbl_active_app.config(text=f"தற்போது இயங்கும் அப்ளிகேஷன்: {app_icon} {app_name}{title_disp}")
+
+        # 2. Update System Stats
         stats = SystemMonitor.get_stats()
         cpu = int(stats["cpu_percent"])
         ram = int(stats["ram_percent"])
@@ -875,13 +1034,17 @@ class DynamicIslandApp:
         self.lbl_battery.config(text=f"{bat_icon} பேட்டரி: {bat}% - {chg_text}")
         self.lbl_disk.config(text=f"💾 வட்டு (C:): {stats['disk_percent']}%")
 
-        # Weather update
+        # 3. Weather update
         if hasattr(self, 'lbl_weather'):
             self.lbl_weather.config(text=WeatherService.get_weather())
 
+        # 4. Redraw compact view
         if not self.is_expanded and not self.animating:
             x1, y1, x2, y2 = self.get_island_bounds()
             self.canvas.delete("compact_element")
-            self.draw_compact_view(x1, y1, x2, y2)
+            if self.alert_active:
+                self.draw_alert_view(x1, y1, x2, y2)
+            else:
+                self.draw_compact_view(x1, y1, x2, y2)
 
         self.root.after(1000, self.update_periodic_data)

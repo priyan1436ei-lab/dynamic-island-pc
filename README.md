@@ -1,75 +1,34 @@
-# 🏝️ Dynamic Island Pro for Windows (விண்டோஸ் லிக்விட் கிளாஸ் டைனமிக் ஐலண்ட்)
-
-> **ஆப்பிள் ஐபோனின் (Apple iPhone) அதிநவீன Dynamic Island போன்றே விண்டோஸ் பிசி மற்றும் லேப்டாப்களுக்காக உருவாக்கப்பட்ட முழுமையான டெஸ்க்டாப் அப்ளிகேஷன்.**
-
-திரையின் மேற்பகுதியில் மிதக்கும் இந்த டைனமிக் ஐலண்ட், விண்டோஸின் அனைத்து அப்ளிகேஷன்களுடனும் நிகழ்நேரத்தில் (Real-time) இணைந்து செயல்படுகிறது. பிரத்யேக **லிக்விட் கிளாஸ் (Liquid Glass)** வடிவமைப்பு மற்றும் 60fps மென்மையான ஸ்பிரிங் அனிமேஷனுடன் (Spring Physics Morphing) வடிவமைக்கப்பட்டுள்ளது.
-
 ---
-
-## ✨ முக்கிய சிறப்பம்சங்கள் (Core Features)
-
-### 1. 🪟 விண்டோஸ் அப்ளிகேஷன்களுடன் நேரலை இணைப்பு (Windows Apps Live Integration)
-* **செயலில் உள்ள அப்ளிகேஷன் கண்காணிப்பு (Active App Tracking)**:
-  - நீங்கள் எந்த விண்டோவில் வேலை செய்கிறீர்களோ (Google Chrome, VS Code, Word, Excel, Spotify, File Explorer போன்றவை), அந்த அப்ளிகேஷனின் பெயர் மற்றும் சாளரத் தலைப்பை (Window Title) டைனமிக் ஐலண்ட் நிகழ்நேரத்தில் காட்டும்.
-* **அழைப்புகள் & எச்சரிக்கை பேனர்கள் (Dynamic Alert Banners)**:
-  - ஸ்கிரீன்ஷாட் எடுக்கும் போதோ, உரையை காப்பி செய்யும் போதோ அல்லது போக்கஸ் டைமர் முடியும் போதோ ஐலண்ட் தானாக ஒரு அறிவிப்பு பேனராக (Alert Capsule) விரிவடைந்து, பிறகு இயல்பு நிலைக்குச் சுருங்கும்.
-* **மீடியா இயக்கி (Windows Media Control)**:
-  - விண்டோஸில் இயங்கும் எந்தவொரு மீடியா அல்லது பாடலையும் முந்தையது, இயக்கு/நிறுத்து, அடுத்தது, சத்தம் கூட்டு/குறைக்க மற்றும் மௌனமாக்க (Mute) செய்யலாம்.
-
+## 7. How to Run & Build from Source
+### Quick Launch (Ready Executable)
+Simply double-click the standalone executable:
+👉 **[DynamicIsland.exe](file:///G:/My%20Drive/New%20folder%20(6)/DynamicIsland.exe)** *(~27 MB, Self-contained, No Python installation required)*
+### Run from Source
+```bash
+# 1. Install dependencies
+python -m pip install psutil pillow
+# 2. Launch the application
+python main.py
+```
+### Compile into Standalone `.exe`
+```bash
+python -m PyInstaller --clean --onefile --noconsole --icon="app_icon.ico" --name="DynamicIsland" main.py
+```
+The output binary will be generated under the `dist/` directory.
 ---
-
-### 2. 💎 லிக்விட் கிளாஸ் வடிவமைப்பு & அனிமேஷன் (Liquid Glass UI & Spring Animations)
-* **ஆப்பிள் லிக்விட் கிளாஸ் தோற்றம் (Apple Liquid Glass Look)**:
-  - ஆழமான கறுப்பு நிற கிளாஸ் பேக் டிராப் (`#08080c`), மேல்புறத்தில் ஒளிப் பிரதிபலிப்பு கோடு (Specular Reflection Highlight), மற்றும் மெல்லிய ஒளிரும் விளிம்பு (Glow Rim).
-* **60fps நடுக்கமில்லா அனிமேஷன் (Zero-Shutter Vector Engine)**:
-  - விண்டோஸின் DWM விண்டோவை ரீசைஸ் செய்யாமல், உயர்வேக நேட்டிவ் வெக்டார் என்ஜின் மூலம் 100% நடுக்கம் மற்றும் திரை தடுமாற்றம் (flicker) இன்றி வெண்ணெய் போல இயங்குகிறது.
-
----
-
-### 3. 📑 6 விரிவான செயல்பாட்டுத் தாவல்கள் (6 Comprehensive Tabs)
-
-| தாவல் (Tab) | உள்ளடக்கம் மற்றும் பயன்கள் |
+## 8. Shortcuts & Interaction Cheat Sheet
+| Interaction | Action |
 | :--- | :--- |
-| **📊 சிஸ்டம் & ஆப்ஸ்** | நிகழ்நேர CPU %, RAM பயன்பாடு, ⬇️ பதிவிறக்க வேகம் & ⬆️ பதிவேற்ற வேகம் (Network IO), லேப்டாப் பேட்டரி (சார்ஜிங் அறிகுறி ⚡), C: டிரைவ் சேமிப்பகம், தற்போது இயங்கும் விண்டோஸ் ஆப் விவரம். |
-| **🎵 மீடியா & ஆடியோ** | பாடல்களைக் கட்டுப்படுத்தும் பொத்தான்கள் (⏮, ⏯, ⏭), கணினி ஒலி அளவு (🔉, 🔇, 🔊), மற்றும் நடனமாடும் ஆடியோ ஈக்வலைசர் அனிமேஷன் (Animated Waveform). |
-| **⚡ கருவிகள் & டைமர்கள்** | **ஸ்டாப்வாட்ச் (Stopwatch)**, **பொமோடோரோ போக்கஸ் டைமர் (Pomodoro Timer - 25m Focus / 5m Break)**, ஒரு கிளிக்கில் ஸ்கிரீன்ஷாட் (Screenshot), மற்றும் கணினியைப் பூட்டும் பொத்தான் (Lock PC). |
-| **📋 குறிப்புகள் & கிளிப்போர்டு** | **கிளிப்போர்டு வரலாறு (Clipboard History)**: கடைசியாக நகலெடுக்கப்பட்ட உரைகளைத் தானாகச் சேமித்து, ஒரே கிளிக்கில் மீண்டும் காப்பி செய்யும் வசதி. நினைவூட்டல்களைத் தட்டச்சு செய்ய உடனுக்குடன் சேமிக்கப்படும் **நோட்பேட் (Scratchpad)**. |
-| **🚀 துவக்கி & வானிலை** | **நேரலை வானிலை (Live Weather & °C)**, மற்றும் கால்குலேட்டர் (Calculator), நோட்பேட் (Notepad), ஃபைல் எக்ஸ்ப்ளோரர் (Explorer), டாஸ்க் மேனேஜர் (Task Manager), பிரவுசர் (Browser) ஆகியவற்றை ஒரு கிளிக்கில் திறக்கும் வசதி. |
-| **⚙️ அளவு & அமைப்பு** | **டைனமிக் ஐலண்டின் அளவு மற்றும் அகலத்தை மாற்றி அமைக்கும் ஸ்லைடர்கள்**, 5 தீம் வண்ணங்கள் (நீலம், பச்சை, ஊதா, ஆரஞ்சு, சிவப்பு), 12h/24h கடிகாரம், லிக்விட் கிளாஸ் எஃபெக்ட் ஆன்/ஆஃப், தானாக விரிவடைதல் & சுருங்குதல். |
-
+| **Hover over Compact Island** | Expands island into full 6-tab card view (if enabled). |
+| **Left Click on Compact Island** | Expands island immediately. |
+| **Move Cursor away** | Automatically collapses back to sleek pill after 1.2 seconds. |
+| **Click [▲ சுருக்கு] Button** | Instantly collapses expanded island. |
+| **Right Click on Island** | Opens Context Menu: Toggle Expand, Settings, Exit. |
+| **Click [📸 ஸ்கிரீன்ஷாட்]** | Captures screen and displays animated notification banner. |
+| **Click [📋 மீண்டும் நகலெடு]** | Copies historic clipboard text back to Windows clipboard. |
+| **Change Any Slider** | Live real-time visual resize of width, height, or margin. |
 ---
-
-## ⚙️ அளவு மற்றும் அகலத்தை மாற்றுவது எப்படி? (Customization Guide)
-
-அப்ளிகேஷனை விரித்து **⚙️ அமைப்புகள்** தாவலுக்குச் செல்லவும்:
-1. **சுருங்கிய நிலை அகலம் (Compact Width)**: 160px முதல் 420px வரை ஸ்லைடர் மூலம் மாற்றலாம்.
-2. **சுருங்கிய நிலை உயரம் (Compact Height)**: 26px முதல் 52px வரை மாற்றலாம்.
-3. **விரிந்த நிலை அகலம் (Expanded Width)**: 420px முதல் 760px வரை மாற்றலாம்.
-4. **மேல் இடைவெளி (Top Screen Margin)**: 0px முதல் 40px வரை திரையின் உச்சிக்கு ஏற்றபடி அமைக்கலாம்.
-5. **தீம் வண்ணங்கள் (Accent Themes)**: 🔵 நீலம், 🟢 பச்சை, 🟣 ஊதா, 🟠 ஆரஞ்சு, 🔴 சிவப்பு.
-6. **சேமி (Save Settings)**: மாற்றங்கள் உடனுக்குடன் திரையில் தெரிவதுடன், **[island_settings.json](file:///G:/My%20Drive/New%20folder%20(6)/island_settings.json)** கோப்பில் நிரந்தரமாகப் பாதுகாக்கப்படுகிறது.
-
----
-
-## 🧪 சோதனை மற்றும் தர உத்தரவாதம் (Testing & Debugging)
-
-அப்ளிகேஷன் பல கட்ட சோதனைகளுக்கு உட்படுத்தப்பட்டு 100% பிழையின்றி உறுதி செய்யப்பட்டுள்ளது:
-- **Unit & Integration Tests (`test_suite.py`)**:
-  - `Config Robustness Test`: அமைப்புகளை ஏற்றுதல் மற்றும் சேமித்தல் பரிசோதிக்கப்பட்டது.
-  - `System & Network IO Test`: CPU, RAM, பேட்டரி, பதிவிறக்க/பதிவேற்ற வேக சோதனைகள் தேர்ச்சி பெற்றன.
-  - `Active App Tracker Test`: இயங்கும் அப்ளிகேஷன் மற்றும் விண்டோ தலைப்பு கண்டறிதல் வெற்றிகரமாக முடிந்தது.
-  - `Weather Service Test`: பின்னணி வானிலை இணைப்பு மற்றும் ஆஃப்லைன் ஃபால்பேக் சோதிக்கப்பட்டது.
-  - `Dynamic Alert & Liquid Glass UI Test`: 6 தாவல்களும், அலர்ட் பேனர்களும், ஸ்லைடர்களும் பிழையின்றி இயங்குவது உறுதி செய்யப்பட்டது.
-- **Stress Testing**: 50 தொடர்ச்சியான விரிவடைதல் / சுருங்குதல் மற்றும் டேப் மாற்ற சோதனைகளில் மெமரி லீக் அல்லது கிராஷ் இன்றி சீராக இயங்கியுள்ளது.
-
----
-
-## 🚀 அப்ளிகேஷனை இயக்குவது எப்படி? (How to Run)
-
-தயாராக உள்ள முழுமையான எக்ஸிகியூட்டபிள் கோப்பு:
-👉 **[DynamicIsland.exe](file:///G:/My%20Drive/New%20folder%20(6)/DynamicIsland.exe)**
-
-1. இந்த ஃபைலை **இரட்டை கிளிக் (Double Click)** செய்து உடனடியாக இயக்கலாம்.
-2. திரையின் மேல் மையத்தில் Dynamic Island தோன்றும்.
-3. மவுஸை அதன் மீது கொண்டு சென்றாலோ அல்லது கிளிக் செய்தாலோ அது விரிவடையும்.
-4. வலது கிளிக் (Right Click) செய்வதன் மூலம் விரைவு மெனுவைத் திறக்கலாம்.
+<p align="center">
+  <b>Designed with ❤️ for Windows 10 & 11</b><br>
+  <i>Experience the elegance of Apple's Dynamic Island with the power of Windows.</i>
+</p>
